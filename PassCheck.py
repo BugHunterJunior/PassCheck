@@ -50,7 +50,7 @@ def print_banner():
 # ─────────────────────────────────────────────
 
 def ensure_rockyou_exists(txt_path="rockyou.txt", gz_path="rockyou.txt.gz"):
-    url = "YOUR_GITHUB_RELEASE_LINK_HERE"
+    url = "https://github.com/BugHunterJunior/PassCheck/releases/download/v1.0/rockyou.txt.gz"
 
     if os.path.exists(txt_path):
         return True
