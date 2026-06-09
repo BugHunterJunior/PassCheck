@@ -311,9 +311,10 @@ def run_password_check():
     table.add_column("Key",   style="dim",       width=18)
     table.add_column("Value", style="bold white", min_width=36)
 
+    table.add_row("Password", f"[bold white]{password}[/]")
+    table.add_row("Length",   f"[white]{len(password)} characters[/]")
     table.add_row("Strength", strength_label(score, is_breached))
     table.add_row("Entropy",  f"{bar}  [{ent_color}]{entropy} bits — {ent_label}[/]")
-    table.add_row("Length",   f"[white]{len(password)} characters[/]")
 
     console.print(table)
 
