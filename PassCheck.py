@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import re
 import os
 import sys
@@ -12,6 +13,26 @@ import ssl
 import hashlib
 import platform
 import subprocess
+
+# ─────────────────────────────────────────────
+#  SELF-HEAL: fix Windows line endings on Linux
+# ─────────────────────────────────────────────
+def _fix_line_endings():
+    script = os.path.abspath(__file__)
+    try:
+        with open(script, 'rb') as f:
+            data = f.read()
+        if b'\r\n' in data:
+            fixed = data.replace(b'\r\n', b'\n')
+            with open(script, 'wb') as f:
+                f.write(fixed)
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+    except Exception:
+        pass
+
+if platform.system() == 'Linux':
+    _fix_line_endings()
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -21,12 +42,12 @@ from rich import box
 
 console = Console()
 
-# ─────────────────────────────────────────────
-#  PLATFORM HELPERS
-# ─────────────────────────────────────────────
-
 IS_WINDOWS = os.name == 'nt'
 IS_LINUX   = platform.system() == 'Linux'
+
+# ─────────────────────────────────────────────
+#  HELPERS
+# ─────────────────────────────────────────────
 
 def clear_screen():
     os.system('cls' if IS_WINDOWS else 'clear')
@@ -52,11 +73,6 @@ INSTALL_TARGET = "/usr/local/bin/passchecker"
 INSTALL_FLAG   = os.path.expanduser("~/.passchecker_installed")
 
 def auto_install():
-    """
-    On first run (Linux only), automatically installs the script to
-    /usr/local/bin/passchecker so it can be run from anywhere.
-    Skips silently on Windows or if already installed.
-    """
     if IS_WINDOWS:
         return
     if os.path.exists(INSTALL_FLAG):
@@ -64,7 +80,6 @@ def auto_install():
 
     script_path = os.path.abspath(__file__)
 
-    # Already running from the install target — nothing to do
     if script_path == INSTALL_TARGET:
         open(INSTALL_FLAG, 'w').close()
         return
@@ -97,7 +112,7 @@ def auto_install():
             border_style="yellow"
         ))
     except FileNotFoundError:
-        pass  # sudo not found — skip silently
+        pass
 
 # ─────────────────────────────────────────────
 #  ROCKYOU SETUP
@@ -201,10 +216,10 @@ def check_password_online(password):
 
 def calculate_entropy(password):
     charset = 0
-    if re.search(r"[a-z]", password):                    charset += 26
-    if re.search(r"[A-Z]", password):                    charset += 26
-    if re.search(r"[0-9]", password):                    charset += 10
-    if re.search(r"[!@#$%^&*()_,.?\":{}|<>]", password): charset += 32
+    if re.search(r"[a-z]", password):                     charset += 26
+    if re.search(r"[A-Z]", password):                     charset += 26
+    if re.search(r"[0-9]", password):                     charset += 10
+    if re.search(r"[!@#$%^&*()_,.?\":{}|<>]", password):  charset += 32
     if charset == 0:
         return 0.0
     return round(len(password) * math.log2(charset), 2)
@@ -248,13 +263,13 @@ def entropy_bar(entropy):
     empty  = 30 - filled
 
     if entropy < 28:
-        color, label = "red",   "Very Low"
+        color, label = "red",    "Very Low"
     elif entropy < 36:
-        color, label = "yellow","Low"
+        color, label = "yellow", "Low"
     elif entropy < 60:
-        color, label = "cyan",  "Good"
+        color, label = "cyan",   "Good"
     else:
-        color, label = "green", "Excellent"
+        color, label = "green",  "Excellent"
 
     bar = f"[{color}]{'█' * filled}[/][dim]{'░' * empty}[/]"
     return bar, label, color
@@ -274,7 +289,6 @@ def run_password_check():
     console.print(Rule("[dim]Breach Detection[/]", style="dim"))
     console.print()
 
-    # Online HIBP check
     console.print("[cyan]  [*] Querying HaveIBeenPwned API (k-anonymity)...[/]")
     online_count = check_password_online(password)
 
@@ -288,7 +302,6 @@ def run_password_check():
     else:
         console.print("  [bold green]✔  Online Check : Clean[/]")
 
-    # Local rockyou check
     console.print("[cyan]  [*] Scanning rockyou.txt wordlist...[/]")
     is_compromised_local = check_rockyou(password)
 
@@ -298,9 +311,8 @@ def run_password_check():
     elif is_compromised_local is False:
         console.print("  [bold green]✔  Local Check  : Clean[/]")
 
-    # Complexity + Entropy
-    score, feedback         = check_password(password)
-    entropy                 = calculate_entropy(password)
+    score, feedback           = check_password(password)
+    entropy                   = calculate_entropy(password)
     bar, ent_label, ent_color = entropy_bar(entropy)
 
     console.print()
@@ -308,8 +320,8 @@ def run_password_check():
     console.print()
 
     table = Table(box=box.SIMPLE_HEAVY, show_header=False, padding=(0, 2))
-    table.add_column("Key",   style="dim",       width=18)
-    table.add_column("Value", style="bold white", min_width=36)
+    table.add_column("Key",   style="dim",        width=18)
+    table.add_column("Value", style="bold white",  min_width=36)
 
     table.add_row("Password", f"[bold white]{password}[/]")
     table.add_row("Length",   f"[white]{len(password)} characters[/]")
