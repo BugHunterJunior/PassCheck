@@ -1,9 +1,8 @@
+#!/usr/bin/env python3
 import re
 import os
 import sys
 import math
-import string
-import secrets
 import getpass
 import urllib.request
 import urllib.error
@@ -42,8 +41,63 @@ def print_banner():
  ╚═╝     ╚═╝  ╚═╝╚══════╝╚══════╝    ╚═════╝╚═╝  ╚═╝╚══════╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝[/]"""
     console.print(banner)
     console.print(
-        "[dim cyan]        🔐 Password Security Checker  •  Dual-Layer Breach Detection  •  v2.0[/]\n"
+        "[dim cyan]        🔐 Password Security Checker  •  Dual-Layer Breach Detection[/]\n"
     )
+
+# ─────────────────────────────────────────────
+#  AUTO INSTALL TO PATH  (Linux only)
+# ─────────────────────────────────────────────
+
+INSTALL_TARGET = "/usr/local/bin/passchecker"
+INSTALL_FLAG   = os.path.expanduser("~/.passchecker_installed")
+
+def auto_install():
+    """
+    On first run (Linux only), automatically installs the script to
+    /usr/local/bin/passchecker so it can be run from anywhere.
+    Skips silently on Windows or if already installed.
+    """
+    if IS_WINDOWS:
+        return
+    if os.path.exists(INSTALL_FLAG):
+        return
+
+    script_path = os.path.abspath(__file__)
+
+    # Already running from the install target — nothing to do
+    if script_path == INSTALL_TARGET:
+        open(INSTALL_FLAG, 'w').close()
+        return
+
+    console.print(Panel(
+        "[cyan]First run detected — installing PassCheck to PATH...[/]\n"
+        "[dim]This allows you to run [bold]passchecker[/bold] from any terminal.[/dim]",
+        title="[bold cyan]Auto Install[/]",
+        border_style="cyan"
+    ))
+
+    try:
+        subprocess.run(["sudo", "cp", script_path, INSTALL_TARGET], check=True)
+        subprocess.run(["sudo", "chmod", "+x", INSTALL_TARGET],     check=True)
+        open(INSTALL_FLAG, 'w').close()
+        console.print(Panel(
+            "[bold green]✔ Installed successfully![/]\n\n"
+            "You can now run [bold cyan]passchecker[/bold cyan] from any terminal.\n"
+            f"[dim]Location: {INSTALL_TARGET}[/dim]",
+            title="[bold green]Install Complete[/]",
+            border_style="green"
+        ))
+    except subprocess.CalledProcessError:
+        console.print(Panel(
+            "[bold red]Auto-install failed.[/] Sudo privileges required.\n\n"
+            "[dim]Manual install:\n"
+            f"  sudo cp {script_path} {INSTALL_TARGET}\n"
+            f"  sudo chmod +x {INSTALL_TARGET}[/dim]",
+            title="[bold yellow]Install Skipped[/]",
+            border_style="yellow"
+        ))
+    except FileNotFoundError:
+        pass  # sudo not found — skip silently
 
 # ─────────────────────────────────────────────
 #  ROCKYOU SETUP
@@ -126,7 +180,7 @@ def check_password_online(password):
     url = f"https://api.pwnedpasswords.com/range/{prefix}"
 
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Python-PassChecker-v2'})
+        req = urllib.request.Request(url, headers={'User-Agent': 'Python-PassChecker'})
         with urllib.request.urlopen(req, timeout=4) as response:
             hashes = response.read().decode('utf-8').splitlines()
 
@@ -146,11 +200,10 @@ def check_password_online(password):
 # ─────────────────────────────────────────────
 
 def calculate_entropy(password):
-    """Shannon entropy: log2(charset_size ^ length)"""
     charset = 0
-    if re.search(r"[a-z]", password):          charset += 26
-    if re.search(r"[A-Z]", password):          charset += 26
-    if re.search(r"[0-9]", password):          charset += 10
+    if re.search(r"[a-z]", password):                    charset += 26
+    if re.search(r"[A-Z]", password):                    charset += 26
+    if re.search(r"[0-9]", password):                    charset += 10
     if re.search(r"[!@#$%^&*()_,.?\":{}|<>]", password): charset += 32
     if charset == 0:
         return 0.0
@@ -190,256 +243,24 @@ def strength_label(score, is_compromised=False):
         return "[bold green]🟢 Strong[/]"
 
 def entropy_bar(entropy):
-    """
-    Returns a color-coded Rich progress bar string based on entropy bits.
-    Thresholds:  <28 = red, 28–35 = yellow, 36–59 = cyan, 60+ = green
-    """
     max_display = 80.0
     filled = min(int((entropy / max_display) * 30), 30)
     empty  = 30 - filled
 
     if entropy < 28:
-        color = "red"
-        label = "Very Low"
+        color, label = "red",   "Very Low"
     elif entropy < 36:
-        color = "yellow"
-        label = "Low"
+        color, label = "yellow","Low"
     elif entropy < 60:
-        color = "cyan"
-        label = "Good"
+        color, label = "cyan",  "Good"
     else:
-        color = "green"
-        label = "Excellent"
+        color, label = "green", "Excellent"
 
     bar = f"[{color}]{'█' * filled}[/][dim]{'░' * empty}[/]"
     return bar, label, color
 
 # ─────────────────────────────────────────────
-#  PASSWORD GENERATOR
-# ─────────────────────────────────────────────
-
-def generate_password(length=16, use_upper=True, use_lower=True,
-                      use_digits=True, use_symbols=True):
-    """
-    Cryptographically secure password generator using secrets module.
-    Guarantees at least one character from each selected category.
-    """
-    charset = ""
-    required = []
-
-    if use_lower:
-        charset += string.ascii_lowercase
-        required.append(secrets.choice(string.ascii_lowercase))
-    if use_upper:
-        charset += string.ascii_uppercase
-        required.append(secrets.choice(string.ascii_uppercase))
-    if use_digits:
-        charset += string.digits
-        required.append(secrets.choice(string.digits))
-    if use_symbols:
-        symbols = "!@#$%^&*()_,.?\":{}|<>"
-        charset += symbols
-        required.append(secrets.choice(symbols))
-
-    if not charset:
-        return None
-
-    remaining = [secrets.choice(charset) for _ in range(length - len(required))]
-    password_list = required + remaining
-    secrets.SystemRandom().shuffle(password_list)
-    return ''.join(password_list)
-
-def generate_passphrase(word_count=4, separator='-'):
-    """
-    Generates a secure passphrase from a curated built-in wordlist.
-    Uses secrets.choice for cryptographic randomness.
-    Falls back to random syllable words if wordlist is unavailable.
-    """
-    # Compact built-in wordlist (200 common, memorable English words)
-    WORDS = [
-        "apple","brave","cloud","dance","eagle","flame","grape","honor","ivory","jewel",
-        "karma","lemon","mango","noble","ocean","pearl","quest","raven","storm","tiger",
-        "ultra","vivid","water","xenon","yacht","zebra","amber","blaze","crane","delta",
-        "ember","frost","globe","haven","input","joker","knife","laser","maple","nerve",
-        "olive","pixel","quartz","robin","solar","torch","umbra","vapor","whale","xray",
-        "yield","zones","atlas","bench","coral","dodge","elite","forge","grain","haste",
-        "index","judge","krait","lunar","mount","ninja","orbit","prism","quota","ridge",
-        "sigma","trail","unity","valve","woods","xenix","youth","zonal","axiom","boost",
-        "chess","draft","epoch","flair","grind","hyper","infer","joust","knack","logic",
-        "magic","nexus","optic","pivot","query","range","scout","thorn","upper","vista",
-        "witch","xeric","yearn","zippy","acorn","birch","cedar","daisy","elder","finch",
-        "goose","holly","irony","jaunt","kudos","lilac","moose","newt","otter","poppy",
-        "quail","robin","swamp","trout","umber","viper","weasel","vixen","yucca","zinnia",
-        "algae","briar","cactus","dingo","egret","flint","gecko","heron","ibis","jackal",
-        "kelp","lotus","morel","nymph","onyx","petal","quill","resin","slate","thyme",
-        "ulcer","venom","wight","xenon","yodel","zingy","acrid","bison","crux","dusk",
-        "epic","fern","gust","hymn","icon","jolt","kale","lynx","myth","nave","opal",
-        "pulp","rune","sage","tusk","urge","volt","wren","xylo","yawn","zest"
-    ]
-
-    chosen = [secrets.choice(WORDS) for _ in range(word_count)]
-    # Capitalise first letter of each word for readability
-    chosen = [w.capitalize() for w in chosen]
-    return separator.join(chosen)
-
-def password_generator_menu():
-    clear_screen()
-    print_banner()
-    console.print(Rule("[bold cyan]  Password Generator  [/]", style="cyan"))
-    console.print()
-
-    while True:
-        console.print("[bold white]Generation Mode:[/]")
-        console.print("  [cyan]1.[/] Random Password  [dim](high entropy, hard to remember)[/]")
-        console.print("  [cyan]2.[/] Passphrase       [dim](memorable, equally strong)[/]")
-        console.print("  [cyan]3.[/] Back to Main Menu")
-        console.print()
-
-        mode = input("Enter choice (1-3): ").strip()
-
-        if mode == '1':
-            console.print()
-            # --- Length ---
-            try:
-                raw = input("Password length [default: 16, min: 8, max: 64]: ").strip()
-                length = int(raw) if raw else 16
-                length = max(8, min(64, length))
-            except ValueError:
-                length = 16
-
-            # --- Character sets ---
-            console.print()
-            console.print("[dim]Include character types (y/n) — press Enter to accept default:[/]")
-            use_upper   = input("  Uppercase letters  [Y/n]: ").strip().lower() != 'n'
-            use_lower   = input("  Lowercase letters  [Y/n]: ").strip().lower() != 'n'
-            use_digits  = input("  Digits             [Y/n]: ").strip().lower() != 'n'
-            use_symbols = input("  Special characters [Y/n]: ").strip().lower() != 'n'
-
-            if not any([use_upper, use_lower, use_digits, use_symbols]):
-                console.print("[bold red]At least one character type must be selected.[/]\n")
-                continue
-
-            # --- Generate ---
-            console.print()
-            console.print(Rule("[dim]Generated Passwords[/]", style="dim"))
-            console.print()
-
-            passwords = [generate_password(length, use_upper, use_lower, use_digits, use_symbols) for _ in range(5)]
-
-            table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold cyan")
-            table.add_column("#",        style="dim",        width=4,  justify="center")
-            table.add_column("Password", style="bold white", min_width=30)
-            table.add_column("Entropy",  style="cyan",       width=14, justify="right")
-            table.add_column("Strength", style="white",      width=12, justify="center")
-
-            for i, pwd in enumerate(passwords, 1):
-                score, _  = check_password(pwd)
-                ent       = calculate_entropy(pwd)
-                _, _, col = entropy_bar(ent)
-                table.add_row(
-                    str(i),
-                    pwd,
-                    f"[{col}]{ent} bits[/]",
-                    strength_label(score)
-                )
-
-            console.print(table)
-            console.print("[dim]  Tip: Pick any password above. All are cryptographically generated.[/]\n")
-
-        elif mode == '2':
-            console.print()
-            # --- Word count ---
-            try:
-                raw = input("Number of words [default: 4, min: 3, max: 8]: ").strip()
-                count = int(raw) if raw else 4
-                count = max(3, min(8, count))
-            except ValueError:
-                count = 4
-
-            # --- Separator ---
-            sep_choice = input("Separator  [-  /  .  _  or custom, default: -]: ").strip()
-            separator = sep_choice if sep_choice else '-'
-
-            # --- Generate ---
-            console.print()
-            console.print(Rule("[dim]Generated Passphrases[/]", style="dim"))
-            console.print()
-
-            passphrases = [generate_passphrase(count, separator) for _ in range(5)]
-
-            table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold cyan")
-            table.add_column("#",          style="dim",        width=4,  justify="center")
-            table.add_column("Passphrase", style="bold white", min_width=30)
-            table.add_column("Entropy",    style="cyan",       width=14, justify="right")
-
-            for i, pp in enumerate(passphrases, 1):
-                ent       = calculate_entropy(pp)
-                _, _, col = entropy_bar(ent)
-                table.add_row(
-                    str(i),
-                    pp,
-                    f"[{col}]{ent} bits[/]"
-                )
-
-            console.print(table)
-            console.print("[dim]  Tip: Passphrases are easier to type and remember — excellent for master passwords.[/]\n")
-
-        elif mode == '3':
-            break
-        else:
-            console.print("[bold red]Invalid choice. Try again.[/]\n")
-
-# ─────────────────────────────────────────────
-#  INSTALL TO PATH  (Linux only)
-# ─────────────────────────────────────────────
-
-def install_to_bin():
-    """
-    Copies this script to /usr/local/bin/passchecker and makes it executable.
-    Linux only. Requires sudo / root privileges.
-    """
-    if IS_WINDOWS:
-        console.print(Panel(
-            "[yellow]The install-to-PATH feature is for Linux only.\n"
-            "On Windows, add the script's folder to your PATH manually via\n"
-            "System → Advanced → Environment Variables.[/]",
-            title="[bold yellow]Windows Notice[/]",
-            border_style="yellow"
-        ))
-        return
-
-    script_path = os.path.abspath(__file__)
-    target      = "/usr/local/bin/passchecker"
-
-    console.print(f"\n[cyan]Installing [bold]{script_path}[/bold] → [bold]{target}[/bold][/]")
-    console.print("[dim]This requires sudo privileges.[/]\n")
-
-    try:
-        subprocess.run(["sudo", "cp", script_path, target], check=True)
-        subprocess.run(["sudo", "chmod", "+x", target],     check=True)
-
-        console.print(Panel(
-            f"[bold green]✔ Installed successfully![/]\n\n"
-            f"You can now run [bold cyan]passchecker[/bold cyan] from any terminal.\n"
-            f"[dim]Location: {target}[/dim]",
-            title="[bold green]Install Complete[/]",
-            border_style="green"
-        ))
-    except subprocess.CalledProcessError:
-        console.print(Panel(
-            "[bold red]Installation failed.[/]\n"
-            "Make sure you have sudo privileges and try again.\n\n"
-            "[dim]Manual install:\n"
-            f"  sudo cp {script_path} {target}\n"
-            f"  sudo chmod +x {target}[/dim]",
-            title="[bold red]Install Failed[/]",
-            border_style="red"
-        ))
-    except FileNotFoundError:
-        console.print("[bold red]ERROR: 'sudo' not found. Are you running Linux?[/]")
-
-# ─────────────────────────────────────────────
-#  PASSWORD CHECK (main flow)
+#  PASSWORD CHECK
 # ─────────────────────────────────────────────
 
 def run_password_check():
@@ -453,7 +274,7 @@ def run_password_check():
     console.print(Rule("[dim]Breach Detection[/]", style="dim"))
     console.print()
 
-    # ── Online HIBP check ──
+    # Online HIBP check
     console.print("[cyan]  [*] Querying HaveIBeenPwned API (k-anonymity)...[/]")
     online_count = check_password_online(password)
 
@@ -467,7 +288,7 @@ def run_password_check():
     else:
         console.print("  [bold green]✔  Online Check : Clean[/]")
 
-    # ── Local rockyou check ──
+    # Local rockyou check
     console.print("[cyan]  [*] Scanning rockyou.txt wordlist...[/]")
     is_compromised_local = check_rockyou(password)
 
@@ -477,42 +298,30 @@ def run_password_check():
     elif is_compromised_local is False:
         console.print("  [bold green]✔  Local Check  : Clean[/]")
 
-    # ── Complexity + Entropy ──
-    score, feedback = check_password(password)
-    entropy         = calculate_entropy(password)
+    # Complexity + Entropy
+    score, feedback         = check_password(password)
+    entropy                 = calculate_entropy(password)
     bar, ent_label, ent_color = entropy_bar(entropy)
 
     console.print()
     console.print(Rule("[dim]Analysis[/]", style="dim"))
     console.print()
 
-    # Result table
     table = Table(box=box.SIMPLE_HEAVY, show_header=False, padding=(0, 2))
-    table.add_column("Key",   style="dim",        width=18)
-    table.add_column("Value", style="bold white",  min_width=36)
+    table.add_column("Key",   style="dim",       width=18)
+    table.add_column("Value", style="bold white", min_width=36)
 
-    table.add_row("Strength",  strength_label(score, is_breached))
-    table.add_row(
-        "Entropy",
-        f"{bar}  [{ent_color}]{entropy} bits — {ent_label}[/]"
-    )
-    table.add_row("Length",    f"[white]{len(password)} characters[/]")
+    table.add_row("Strength", strength_label(score, is_breached))
+    table.add_row("Entropy",  f"{bar}  [{ent_color}]{entropy} bits — {ent_label}[/]")
+    table.add_row("Length",   f"[white]{len(password)} characters[/]")
 
     console.print(table)
 
-    # Feedback tips
     if feedback and not is_breached:
         console.print()
         console.print("  [bold yellow]💡 Suggestions:[/]")
         for tip in feedback:
             console.print(f"  [dim yellow] •[/] {tip}")
-
-    # Suggest generator if weak or breached
-    if is_breached or score <= 3:
-        console.print()
-        console.print(
-            "  [dim]→ Try [bold cyan]Option 2[/bold cyan] from the main menu to generate a strong password.[/]"
-        )
 
     console.print()
     console.print(Rule(style="dim"))
@@ -525,6 +334,7 @@ def run_password_check():
 def main():
     clear_screen()
     print_banner()
+    auto_install()
 
     if not ensure_rockyou_exists():
         console.print("[bold red]Critical Error: Cannot proceed without rockyou.txt.[/]")
@@ -533,42 +343,19 @@ def main():
     while True:
         console.print(Rule("[bold cyan]  Main Menu  [/]", style="cyan"))
         console.print()
-        console.print("  [cyan]1.[/] [white]Check Password[/]         [dim]Local + HIBP breach detection & complexity[/]")
-        console.print("  [cyan]2.[/] [white]Generate Password[/]      [dim]Secure random password or passphrase[/]")
-
-        if IS_LINUX:
-            console.print("  [cyan]3.[/] [white]Install to PATH[/]        [dim]Run 'passchecker' from anywhere (Linux)[/]")
-            console.print("  [cyan]4.[/] [white]Exit[/]")
-            valid = ('1', '2', '3', '4')
-            prompt = "\n  Enter choice (1-4): "
-        else:
-            console.print("  [cyan]3.[/] [white]Exit[/]")
-            valid = ('1', '2', '3')
-            prompt = "\n  Enter choice (1-3): "
-
+        console.print("  [cyan]1.[/] [white]Check Password[/]    [dim]Local + HIBP breach detection & complexity[/]")
+        console.print("  [cyan]2.[/] [white]Exit[/]")
         console.print()
-        choice = input(prompt).strip()
+
+        choice = input("  Enter choice (1-2): ").strip()
         clear_screen()
         print_banner()
 
         if choice == '1':
             run_password_check()
-
         elif choice == '2':
-            password_generator_menu()
-            clear_screen()
-            print_banner()
-
-        elif choice == '3' and IS_LINUX:
-            install_to_bin()
-            input("\n  Press Enter to return to menu...")
-            clear_screen()
-            print_banner()
-
-        elif (choice == '4' and IS_LINUX) or (choice == '3' and not IS_LINUX):
             console.print("\n  [bold green]Goodbye! Stay secure. 🛡[/]\n")
             break
-
         else:
             console.print("[bold red]  Invalid option. Please try again.[/]\n")
 
